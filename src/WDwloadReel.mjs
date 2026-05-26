@@ -1,0 +1,245 @@
+import fs from 'fs'
+import get from 'lodash-es/get.js'
+import genPm from 'wsemi/src/genPm.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
+import cint from 'wsemi/src/cint.mjs'
+import getPathParent from 'wsemi/src/getPathParent.mjs'
+import fsIsFolder from 'wsemi/src/fsIsFolder.mjs'
+import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
+
+
+/**
+ * 下載Facebook Reel為mp4檔案至本機指定位置
+ *
+ * @param {String} url 輸入Facebook Reel網址字串(facebook.com / fb.watch)
+ * @param {String} fp 輸入儲存video(*.mp4)檔案路徑字串
+ * @param {Object} [opt={}] 輸入設定物件，預設{}
+ * @param {Function} [opt.funProg=null] 輸入回傳進度函數，傳入參數為prog代表進度百分比(0~100)、nn代表當前已下載bytes、na代表全部須下載bytes，預設null
+ * @returns {Promise} 回傳Promise，resolve回傳'ok'，reject回傳錯誤訊息
+ * @example
+ * import fs from 'fs'
+ * import WDwloadReel from './src/WDwloadReel.mjs'
+ *
+ * async function test() {
+ *
+ *     //url
+ *     let url = 'https://www.facebook.com/reel/XXXXXXXXXX'
+ *
+ *     //fp
+ *     let fp = './abc.mp4'
+ *
+ *     //funProg
+ *     let funProg = (prog, nn, na) => {
+ *         console.log('prog', `${prog.toFixed(2)}%`, nn, na)
+ *     }
+ *
+ *     //WDwloadReel
+ *     await WDwloadReel(url, fp, {
+ *         funProg,
+ *     })
+ *
+ *     //len
+ *     let len = fs.statSync(fp).size
+ *     console.log('len', len)
+ *
+ *     console.log('done:', fp)
+ * }
+ * test()
+ *     .catch((err) => {
+ *         console.log('catch', err)
+ *     })
+ * // prog 1.00% 23456 2345678
+ * // prog 2.00% 46912 2345678
+ * // ...
+ * // prog 99.00% 2322221 2345678
+ * // prog 100.00% 2345678 2345678
+ * // len 2345678
+ * // done: ./abc.mp4
+ *
+ */
+async function WDwloadReel(url, fp, opt = {}) {
+
+    //funProg
+    let funProg = get(opt, 'funProg')
+    let bFunProg = isfun(funProg)
+
+    //check
+    if (!isestr(url)) {
+        return Promise.reject('invalid url')
+    }
+    if (!isestr(fp)) {
+        return Promise.reject('fp is not a string')
+    }
+
+    let isMp4 = (buf) => {
+        //mp4 magic: bytes 4..7 = 'ftyp' (ISO base media file type box), 再驗 bytes 8..11 為常見 mp4 brand, 排除 JPEG2000 等其他 ftyp 容器格式
+        if (buf.length < 12) {
+            return false
+        }
+        if (buf.slice(4, 8).toString('ascii') !== 'ftyp') {
+            return false
+        }
+        let brand = buf.slice(8, 12).toString('ascii')
+        return ['isom', 'mp41', 'mp42', 'avc1', 'iso2', 'iso5', 'iso6', 'mp4v'].includes(brand)
+    }
+
+    let getRealData = async (url) => {
+
+        //pm
+        let pm = genPm()
+
+        //check
+        if (!isestr(url)) {
+            pm.reject('invalid url')
+            return pm
+        }
+
+        //parseString
+        let parseString = (string) => {
+            return JSON.parse(`{"text": "${string}"}`).text
+        }
+
+        //fetch, 參數與解析機制來源: https://github.com/victorsouzaleal/fb-downloader-scrapper/blob/main/src/facebook.ts
+        let headers = {
+            'sec-fetch-user': '?1',
+            'sec-ch-ua-mobile': '?0',
+            'sec-fetch-site': 'none',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'cache-control': 'max-age=0',
+            'authority': 'www.facebook.com',
+            'upgrade-insecure-requests': '1',
+            'accept-language': 'en-GB,en;q=0.9,tr-TR;q=0.8,tr;q=0.7,en-US;q=0.6',
+            'sec-ch-ua': '"Google Chrome";v="89", "Chromium";v="89", ";Not A Brand";v="99"',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'cookie': 'sb=Rn8BYQvCEb2fpMQZjsd6L382; datr=Rn8BYbyhXgw9RlOvmsosmVNT; c_user=100003164630629; _fbp=fb.1.1629876126997.444699739; wd=1920x939; spin=r.1004812505_b.trunk_t.1638730393_s.1_v.2_; xs=28%3A8ROnP0aeVF8XcQ%3A2%3A1627488145%3A-1%3A4916%3A%3AAcWIuSjPy2mlTPuZAeA2wWzHzEDuumXI89jH8a_QIV8; fr=0jQw7hcrFdas2ZeyT.AWVpRNl_4noCEs_hb8kaZahs-jA.BhrQqa.3E.AAA.0.0.BhrQqa.AWUu879ZtCw',
+        }
+        fetch(url, { headers })
+            .then((res) => {
+
+                //check
+                if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+
+                return res.text()
+            })
+            .then((data) => {
+
+                data = data.replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+                let sdMatch = data.match(/"browser_native_sd_url":"(.*?)"/) || data.match(/"playable_url":"(.*?)"/) || data.match(/sd_src\s*:\s*"([^"]*)"/) || data.match(/(?<="src":")[^"]*(https:\/\/[^"]*)/)
+                let hdMatch = data.match(/"browser_native_hd_url":"(.*?)"/) || data.match(/"playable_url_quality_hd":"(.*?)"/) || data.match(/hd_src\s*:\s*"([^"]*)"/)
+                let titleMatch = data.match(/<meta\sname="description"\scontent="(.*?)"/)
+                let thumbMatch = data.match(/"preferred_thumbnail":{"image":{"uri":"(.*?)"/)
+                let duration = data.match(/"playable_duration_in_ms":[0-9]+/gm)
+
+                //check
+                if (sdMatch && sdMatch[1]) {
+                    let result = {
+                        url,
+                        duration_ms: cint(duration[0].split(':')[1]),
+                        sd: parseString(sdMatch[1]),
+                        hd: hdMatch && hdMatch[1] ? parseString(hdMatch[1]) : '',
+                        title: titleMatch && titleMatch[1] ? parseString(titleMatch[1]) : data.match(/<title>(.*?)<\/title>/)?.[1] ?? '',
+                        thumbnail: thumbMatch && thumbMatch[1] ? parseString(thumbMatch[1]) : '',
+                    }
+                    pm.resolve(result)
+                }
+                else {
+                    pm.reject('no video url found in page')
+                }
+
+            })
+            .catch((err) => {
+                pm.reject(err)
+            })
+
+        return pm
+    }
+
+    //getRealData, 解析FB頁面取得mp4直連
+    let info
+    try {
+        info = await getRealData(url)
+    }
+    catch (err) {
+        return Promise.reject(err)
+    }
+
+    //check, 須有hd或sd其中之一
+    if (!info.hd && !info.sd) {
+        return Promise.reject('can not get hd/sd mp4 url (reel may be private/deleted/FB changed)')
+    }
+
+    //target, 優先hd
+    let target = info.hd || info.sd
+
+    //fetch
+    let res
+    try {
+        res = await fetch(target)
+    }
+    catch (err) {
+        return Promise.reject(`fetch mp4 fail: ${err.message}`)
+    }
+
+    //check
+    if (!res.ok) {
+        return Promise.reject(`HTTP ${res.status} ${res.statusText}`)
+    }
+
+    //total, Content-Length未必提供, 取不到視為0(中段不觸發funProg, 最後仍補100%)
+    let total = cint(res.headers.get('content-length'))
+
+    //讀取串流並計算進度
+    let reader = res.body.getReader()
+    let chunks = []
+    let received = 0
+    let progPre = -1
+    while (true) {
+        let { done, value } = await reader.read()
+        if (done) {
+            break
+        }
+        chunks.push(value)
+        received += value.length
+
+        //funProg, 整數百分比變動才觸發避免高頻
+        if (bFunProg && total > 0) {
+            let prog = (received / total) * 100
+            let progInt = Math.floor(prog)
+            if (progInt > progPre) {
+                progPre = progInt
+                funProg(prog, received, total)
+            }
+        }
+    }
+
+    //buf
+    let buf = Buffer.concat(chunks)
+
+    //check mp4 magic, 避免HTML錯誤頁面或非mp4回應被當mp4寫入
+    if (!isMp4(buf)) {
+        return Promise.reject(`downloaded but not valid mp4 (first 16 bytes: ${buf.slice(0, 16).toString('hex')})`)
+    }
+
+    //mkdir, 上層目錄不存在時自動建立
+    let dir = getPathParent(fp)
+    if (isestr(dir) && !fsIsFolder(dir)) {
+        fsCreateFolder(dir)
+    }
+
+    //write
+    fs.writeFileSync(fp, buf)
+
+    //funProg, 最終補100%(涵蓋無Content-Length時中段未觸發的情況)
+    if (bFunProg) {
+        let na = total || buf.length
+        funProg(100, na, na)
+    }
+
+    return 'ok'
+}
+
+
+export default WDwloadReel
