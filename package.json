@@ -1,6 +1,6 @@
 {
   "name": "w-dwload-reel",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "dist/w-dwload-reel.umd.js",
   "dependencies": {
     "lodash-es": "^4.18.1",

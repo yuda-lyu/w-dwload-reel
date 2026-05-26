@@ -206,7 +206,7 @@ async function WDwloadReel(url, fp, opt = {}) {
 
         //funProg, 整數百分比變動才觸發避免高頻
         if (bFunProg && total > 0) {
-            let prog = (received / total) * 100
+            let prog = (received / total) * 99 //預留1%給最後寫入完成補足
             let progInt = Math.floor(prog)
             if (progInt > progPre) {
                 progPre = progInt
