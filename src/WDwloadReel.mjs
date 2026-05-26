@@ -24,7 +24,7 @@ import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
  * async function test() {
  *
  *     //url
- *     let url = 'https://www.facebook.com/reel/XXXXXXXXXX'
+ *     let url = 'https://www.facebook.com/reel/3403300299820247'
  *
  *     //fp
  *     let fp = './abc.mp4'
@@ -54,7 +54,7 @@ import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
  * // ...
  * // prog 99.00% 2322221 2345678
  * // prog 100.00% 2345678 2345678
- * // len 2345678
+ * // len 8468825
  * // done: ./abc.mp4
  *
  */
