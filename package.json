@@ -1,9 +1,9 @@
 {
   "name": "w-dwload-reel",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "main": "dist/w-dwload-reel.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.42"
+    "wsemi": "^1.9.45"
   },
   "devDependencies": {
     "w-package-tools": "^1.1.23"
