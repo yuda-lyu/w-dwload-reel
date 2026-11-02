@@ -1,12 +1,12 @@
 {
   "name": "w-dwload-reel",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "main": "dist/w-dwload-reel.umd.js",
   "dependencies": {
-    "wsemi": "^1.9.37"
+    "wsemi": "^1.9.42"
   },
   "devDependencies": {
-    "w-package-tools": "^1.1.21"
+    "w-package-tools": "^1.1.23"
   },
   "scripts": {
     "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
