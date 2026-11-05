@@ -24,24 +24,25 @@ describe('WDwloadReel', function() {
             funProg,
         })
 
-        //len
+        //len, boxType(mp4 檔首之 box 型別在位元組 4~7)
         let len = fs.statSync(fp).size
-        // console.log('len', len)
+        let boxType = fs.readFileSync(fp).subarray(4, 8).toString('latin1')
 
         //unlinkSync
         fs.unlinkSync(fp)
 
-        return len
+        return { len, boxType }
     }
     // test()
     //     .catch((err) => {
     //         console.log('catch', err)
     //     })
 
+    //外部影片之編碼與位元組數由對方決定,會隨對方改版而變,故只驗下載到完整之 mp4,不比對確切大小
     it('download', async function() {
-        let r = 8468825
-        let rr = await test()
-        assert.strict.deepEqual(r, rr)
+        let { len, boxType } = await test()
+        assert.strict.equal(boxType, 'ftyp')
+        assert.ok(len > 1024 * 1024, `下載檔過小: ${len}`)
     })
 
 })
